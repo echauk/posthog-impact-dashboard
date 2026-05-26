@@ -2,7 +2,7 @@
 
 An analysis and interactive dashboard that identifies the most impactful engineers at PostHog over the last 90 days, designed for a busy engineering leader to scan in seconds.
 
-**Live dashboard:** _(add GitHub Pages URL after deployment)_
+**Live dashboard:** https://echauk.github.io/posthog-impact-dashboard/
 
 ---
 
@@ -122,4 +122,4 @@ Open `index.html` in a browser — no server needed.
 | 4 | andrewm4894 | 73.2 | High |
 | 5 | eli-r-ph | 72.9 | High |
 
-See the [live dashboard](#) for narratives and per-signal evidence.
+See the [live dashboard](https://echauk.github.io/posthog-impact-dashboard/) for narratives and per-signal evidence.
