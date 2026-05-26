@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PostHog: Most Impactful Engineers</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --tier-exceptional: #10b981;
+      --tier-high: #3b82f6;
+      --tier-solid: #6b7280;
+      --tier-average: #f59e0b;
+      --tier-belowavg: #ef4444;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", sans-serif;
+      background: #fafafa;
+      color: #111827;
+    }
+    .collapsible {
+      overflow: hidden;
+      transition: max-height 220ms ease, opacity 220ms ease, margin-top 220ms ease;
+      max-height: 4000px;
+      opacity: 1;
+    }
+    .collapsible.collapsed {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0 !important;
+    }
+    .tier-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+    .tier-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 400ms ease;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6b7280;
+    }
+    .signal-prefix {
+      font-size: 11px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+    button.toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #2563eb;
+      font-size: 13px;
+      padding: 0;
+    }
+    button.toggle:hover { color: #1d4ed8; text-decoration: underline; }
+    .card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #f3f4f6;
+      color: #374151;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 12px;
+    }
+    .tier-chip {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      color: white;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="max-w-5xl mx-auto px-6 py-10">
+
+    <!-- Header -->
+    <header class="mb-6">
+      <div class="flex items-baseline justify-between flex-wrap gap-y-2">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900 mb-1">PostHog: Most Impactful Engineers</h1>
+          <p class="text-sm text-gray-600">Ranked across 6 signals over the last 90 days.</p>
+        </div>
+        <div class="text-xs text-gray-500" id="scope-text"></div>
+      </div>
+      <button id="methodology-toggle" class="toggle mt-3">▾ See methodology</button>
+    </header>
+
+    <!-- Methodology drawer -->
+    <section id="methodology" class="collapsible collapsed mb-6">
+      <div class="card mt-3">
+        <p class="text-sm text-gray-700 mb-5 leading-relaxed" id="methodology-intro"></p>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="methodology-cards"></div>
+      </div>
+    </section>
+
+    <!-- Engineer cards -->
+    <main id="engineers" class="space-y-4"></main>
+
+    <footer class="mt-10 text-xs text-gray-400 text-center" id="footer-text"></footer>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────────
+    // Data (embedded from engineer-impact-analysis.json)
+    // ─────────────────────────────────────────────────────────────────
+    const DATA = {"metadata": {"generated_at": "2026-05-26T06:45:02.365722+00:00", "since": "2026-02-25T06:45:02Z", "repo": "PostHog/posthog", "days": 90}, "engineers_analyzed": 101, "thresholds": {"min_prs": 10, "min_reviews": 30}, "scoring_methodology": {"approach": "Per-metric percentile rank across active engineers, averaged into per-signal score (0–100), then averaged into overall impact (0–100).", "exception": "Signal 5 (reliability) uses direct (1 − revert_rate) × 100 — most engineers have 0 reverts and percentile ranking over-penalizes high-volume engineers with rare reverts.", "tiers": {"Exceptional": "≥75", "High": "65-75", "Solid": "50-65", "Emerging": "<50"}, "scored_signals": ["Shipping Consistency", "Ownership Profile", "Review Impact", "Code Reliability", "Communication Quality"], "descriptive_signal": "Work Type Mix (shown as context, not scored — depends on role)"}, "ranked_engineers": ["sampennington", "skoob13", "pauldambra", "andrewm4894", "eli-r-ph"], "engineers": {"sampennington": {"overall_impact": 80.5, "tier": "Exceptional", "work_mix": "fix=31%, feat=30%, chore=26%", "top_strengths": [{"signal": "Shipping Consistency", "fact": "PR merge frequency: 19.4 PRs/wk (99th pct)"}, {"signal": "Shipping Consistency", "fact": "commit cadence: 19.0 commits/wk (99th pct)"}, {"signal": "Review Impact", "fact": "review volume: 276 PRs reviewed (99th pct)"}], "watch_outs": [{"signal": "Review Impact", "fact": "complexity reviewed: 442 lines/PR avg (20th pct)"}, {"signal": "Shipping Consistency", "fact": "weekly consistency: variance=0.63 (lower=steadier) (35th pct)"}], "signals": {"signal_1_consistency": {"label": "Shipping Consistency", "score": 69.2, "headline": "Strong", "key_facts": ["PR merge frequency: 19.4 PRs/wk (99th pct)", "commit cadence: 19.0 commits/wk (99th pct)", "PR cycle time: median=11h open→merge (65th pct)", "review rounds per PR: 3.6 reviews/PR (48th pct)", "weekly consistency: variance=0.63 (lower=steadier) (35th pct)"], "drivers": {"strongest": {"label": "PR merge frequency", "raw_value": 19.444444444444443, "raw_display": "19.4 PRs/wk", "percentile": 99.0, "fact": "PR merge frequency: 19.4 PRs/wk (99th pct)", "signal": "signal_1_consistency"}, "weakest": {"label": "weekly consistency", "raw_value": 0.6304988423724392, "raw_display": "variance=0.63 (lower=steadier)", "percentile": 35.0, "fact": "weekly consistency: variance=0.63 (lower=steadier) (35th pct)", "signal": "signal_1_consistency"}}}, "signal_3_ownership": {"label": "Ownership Profile", "score": 88.2, "headline": "Top-tier", "key_facts": ["files touched: 1737 files across PRs (98th pct)", "ownership depth: 76% of work in frontend (91th pct)", "ownership breadth: 8 distinct areas (85th pct)", "critical-area focus: 94% of files in critical paths (vs docs/scripts/utility) (79th pct)"], "drivers": {"strongest": {"label": "files touched", "raw_value": 1737, "raw_display": "1737 files across PRs", "percentile": 98.0, "fact": "files touched: 1737 files across PRs (98th pct)", "signal": "signal_3_ownership"}, "weakest": {"label": "critical-area focus", "raw_value": 94.30051813471503, "raw_display": "94% of files in critical paths (vs docs/scripts/utility)", "percentile": 79.0, "fact": "critical-area focus: 94% of files in critical paths (vs docs/scripts/utility) (79th pct)", "signal": "signal_3_ownership"}}}, "signal_4_review": {"label": "Review Impact", "score": 69.4, "headline": "Strong", "key_facts": ["review volume: 276 PRs reviewed (99th pct)", "review comment depth: 277 chars/review (91th pct)", "times requested as reviewer: 11 explicit requests (77th pct)", "first review speed: median=2.2h (60th pct)", "complexity reviewed: 442 lines/PR avg (20th pct)"], "drivers": {"strongest": {"label": "review volume", "raw_value": 276, "raw_display": "276 PRs reviewed", "percentile": 99.0, "fact": "review volume: 276 PRs reviewed (99th pct)", "signal": "signal_4_review"}, "weakest": {"label": "complexity reviewed", "raw_value": 442.46088794926004, "raw_display": "442 lines/PR avg", "percentile": 20.0, "fact": "complexity reviewed: 442 lines/PR avg (20th pct)", "signal": "signal_4_review"}}}, "signal_6_communication": {"label": "Communication Quality", "score": 75.7, "headline": "Strong", "key_facts": ["PR template completeness: 93% of sections substantive (80th pct)", "testing notes: 90% of PRs include test detail (75th pct)", "PR description length: avg 1957 chars (72th pct)"], "drivers": {"strongest": {"label": "PR template completeness", "raw_value": 0.9306666666666666, "raw_display": "93% of sections substantive", "percentile": 80.0, "fact": "PR template completeness: 93% of sections substantive (80th pct)", "signal": "signal_6_communication"}, "weakest": {"label": "PR description length", "raw_value": 1957.92, "raw_display": "avg 1957 chars", "percentile": 72.0, "fact": "PR description length: avg 1957 chars (72th pct)", "signal": "signal_6_communication"}}}, "signal_5_reliability": {"label": "Code Reliability", "score": 100.0, "headline": "Top-tier", "key_facts": ["0 reverts in 250 PRs (0.0%)"], "explanation": "score = (1 - revert_rate) × 100 (direct, not percentile-based)"}}, "raw_metrics": {"signal_1": {"pr_count": 250, "commit_count": 244, "pr_per_week": 19.444444444444443, "commits_per_week": 18.977777777777778, "consistency_cv": 0.6304988423724392, "median_cycle_hours": 11.103333333333333, "mean_review_rounds": 3.56}, "signal_2": {"total": 250, "distribution": {"fix": 0.308, "feat": 0.296, "chore": 0.264, "other": 0.008, "refactor": 0.08, "docs": 0.008, "test": 0.02, "perf": 0.016}, "category_counts": {"fix": 77, "feat": 74, "chore": 66, "other": 2, "refactor": 20, "docs": 2, "test": 5, "perf": 4}, "feat_fix_ratio": 0.604}, "signal_3": {"top_dirs": [["frontend/src", 1209], ["products/product_analytics", 97], ["products/catalog", 65], ["frontend/__snapshots__", 63], ["posthog/hogql_queries", 55]], "top_domains": [["frontend", 1315], ["product analytics", 97], ["HogQL", 74], ["catalog", 65], ["playwright", 58]], "primary_domain": "frontend", "primary_domain_share": 0.7570523891767416, "depth_score": 0.7518710420264825, "breadth_score": 8, "critical_files_pct": 94.30051813471503, "total_files_touched": 1737}, "signal_4": {"review_volume": 473, "review_pr_count": 276, "avg_complexity_lines": 442.46088794926004, "avg_complexity_files": 8.50739957716702, "avg_comment_depth_chars": 277.0126849894292, "median_time_to_first_review_hours": 2.1933333333333334, "requested_reviewer_count": 11, "inline_comment_count": 418}, "signal_5": {"revert_count": 0, "total_prs": 250, "revert_rate": 0.0, "reverted_prs": []}, "signal_6": {"avg_body_length": 1957.92, "avg_section_completeness": 0.9306666666666666, "testing_section_filled_ratio": 0.904}}}, "skoob13": {"overall_impact": 78.0, "tier": "Exceptional", "work_mix": "fix=40%, feat=36%, chore=19%", "top_strengths": [{"signal": "Review Impact", "fact": "complexity reviewed: 1711 lines/PR avg (95th pct)"}, {"signal": "Shipping Consistency", "fact": "PR merge frequency: 11.0 PRs/wk (94th pct)"}, {"signal": "Shipping Consistency", "fact": "commit cadence: 10.0 commits/wk (92th pct)"}], "watch_outs": [{"signal": "Ownership Profile", "fact": "critical-area focus: 42% of files in critical paths (vs docs/scripts/utility) (10th pct)"}], "signals": {"signal_1_consistency": {"label": "Shipping Consistency", "score": 82.4, "headline": "Top-tier", "key_facts": ["PR merge frequency: 11.0 PRs/wk (94th pct)", "commit cadence: 10.0 commits/wk (92th pct)", "review rounds per PR: 2.4 reviews/PR (87th pct)", "PR cycle time: median=3h open→merge (86th pct)", "weekly consistency: variance=0.57 (lower=steadier) (53th pct)"], "drivers": {"strongest": {"label": "PR merge frequency", "raw_value": 10.966666666666667, "raw_display": "11.0 PRs/wk", "percentile": 94.0, "fact": "PR merge frequency: 11.0 PRs/wk (94th pct)", "signal": "signal_1_consistency"}, "weakest": {"label": "weekly consistency", "raw_value": 0.5747122877440999, "raw_display": "variance=0.57 (lower=steadier)", "percentile": 53.0, "fact": "weekly consistency: variance=0.57 (lower=steadier) (53th pct)", "signal": "signal_1_consistency"}}}, "signal_3_ownership": {"label": "Ownership Profile", "score": 63.0, "headline": "Strong", "key_facts": ["files touched: 1153 files across PRs (92th pct)", "ownership breadth: 7 distinct areas (76th pct)", "ownership depth: 53% of work in MCP (74th pct)", "critical-area focus: 42% of files in critical paths (vs docs/scripts/utility) (10th pct)"], "drivers": {"strongest": {"label": "files touched", "raw_value": 1153, "raw_display": "1153 files across PRs", "percentile": 92.0, "fact": "files touched: 1153 files across PRs (92th pct)", "signal": "signal_3_ownership"}, "weakest": {"label": "critical-area focus", "raw_value": 42.32437120555074, "raw_display": "42% of files in critical paths (vs docs/scripts/utility)", "percentile": 10.0, "fact": "critical-area focus: 42% of files in critical paths (vs docs/scripts/utility) (10th pct)", "signal": "signal_3_ownership"}}}, "signal_4_review": {"label": "Review Impact", "score": 77.3, "headline": "Strong", "key_facts": ["complexity reviewed: 1711 lines/PR avg (95th pct)", "review volume: 157 PRs reviewed (85th pct)", "times requested as reviewer: 14 explicit requests (84th pct)", "first review speed: median=2.0h (65th pct)", "review comment depth: 131 chars/review (58th pct)"], "drivers": {"strongest": {"label": "complexity reviewed", "raw_value": 1711.3737373737374, "raw_display": "1711 lines/PR avg", "percentile": 95.0, "fact": "complexity reviewed: 1711 lines/PR avg (95th pct)", "signal": "signal_4_review"}, "weakest": {"label": "review comment depth", "raw_value": 130.8080808080808, "raw_display": "131 chars/review", "percentile": 58.0, "fact": "review comment depth: 131 chars/review (58th pct)", "signal": "signal_4_review"}}}, "signal_6_communication": {"label": "Communication Quality", "score": 67.3, "headline": "Strong", "key_facts": ["PR template completeness: 92% of sections substantive (75th pct)", "testing notes: 88% of PRs include test detail (71th pct)", "PR description length: avg 1661 chars (56th pct)"], "drivers": {"strongest": {"label": "PR template completeness", "raw_value": 0.91725768321513, "raw_display": "92% of sections substantive", "percentile": 75.0, "fact": "PR template completeness: 92% of sections substantive (75th pct)", "signal": "signal_6_communication"}, "weakest": {"label": "PR description length", "raw_value": 1661.4822695035461, "raw_display": "avg 1661 chars", "percentile": 56.0, "fact": "PR description length: avg 1661 chars (56th pct)", "signal": "signal_6_communication"}}}, "signal_5_reliability": {"label": "Code Reliability", "score": 100.0, "headline": "Top-tier", "key_facts": ["0 reverts in 141 PRs (0.0%)"], "explanation": "score = (1 - revert_rate) × 100 (direct, not percentile-based)"}}, "raw_metrics": {"signal_1": {"pr_count": 141, "commit_count": 128, "pr_per_week": 10.966666666666667, "commits_per_week": 9.955555555555556, "consistency_cv": 0.5747122877440999, "median_cycle_hours": 2.888333333333333, "mean_review_rounds": 2.4397163120567376}, "signal_2": {"total": 141, "distribution": {"chore": 0.19148936170212766, "feat": 0.3617021276595745, "fix": 0.3971631205673759, "docs": 0.0070921985815602835, "other": 0.03546099290780142, "refactor": 0.0070921985815602835}, "category_counts": {"chore": 27, "feat": 51, "fix": 56, "docs": 1, "other": 5, "refactor": 1}, "feat_fix_ratio": 0.7588652482269505}, "signal_3": {"top_dirs": [["services/mcp", 606], ["ee/hogai", 169], ["products/posthog_ai", 88], ["products/tasks", 46], ["frontend/src", 45]], "top_domains": [["MCP", 606], ["AI / HogAI", 169], ["posthog ai", 88], ["frontend", 74], ["tasks", 46]], "primary_domain": "MCP", "primary_domain_share": 0.5255854293148309, "depth_score": 0.6721595836947094, "breadth_score": 7, "critical_files_pct": 42.32437120555074, "total_files_touched": 1153}, "signal_4": {"review_volume": 198, "review_pr_count": 157, "avg_complexity_lines": 1711.3737373737374, "avg_complexity_files": 13.676767676767676, "avg_comment_depth_chars": 130.8080808080808, "median_time_to_first_review_hours": 1.98, "requested_reviewer_count": 14, "inline_comment_count": 156}, "signal_5": {"revert_count": 0, "total_prs": 141, "revert_rate": 0.0, "reverted_prs": []}, "signal_6": {"avg_body_length": 1661.4822695035461, "avg_section_completeness": 0.91725768321513, "testing_section_filled_ratio": 0.8794326241134752}}}, "pauldambra": {"overall_impact": 75.8, "tier": "Exceptional", "work_mix": "fix=40%, feat=32%, chore=18%", "top_strengths": [{"signal": "Shipping Consistency", "fact": "PR merge frequency: 29.2 PRs/wk (100th pct)"}, {"signal": "Shipping Consistency", "fact": "commit cadence: 29.0 commits/wk (100th pct)"}, {"signal": "Review Impact", "fact": "review volume: 309 PRs reviewed (100th pct)"}], "watch_outs": [{"signal": "Shipping Consistency", "fact": "review rounds per PR: 6.8 reviews/PR (1th pct)"}, {"signal": "Review Impact", "fact": "complexity reviewed: 469 lines/PR avg (22th pct)"}, {"signal": "Code Reliability", "fact": "3 reverts in 376 PRs (0.8%)"}], "signals": {"signal_1_consistency": {"label": "Shipping Consistency", "score": 71.2, "headline": "Strong", "key_facts": ["PR merge frequency: 29.2 PRs/wk (100th pct)", "commit cadence: 29.0 commits/wk (100th pct)", "PR cycle time: median=5h open→merge (79th pct)", "weekly consistency: variance=0.50 (lower=steadier) (76th pct)", "review rounds per PR: 6.8 reviews/PR (1th pct)"], "drivers": {"strongest": {"label": "PR merge frequency", "raw_value": 29.244444444444444, "raw_display": "29.2 PRs/wk", "percentile": 100.0, "fact": "PR merge frequency: 29.2 PRs/wk (100th pct)", "signal": "signal_1_consistency"}, "weakest": {"label": "review rounds per PR", "raw_value": 6.792553191489362, "raw_display": "6.8 reviews/PR", "percentile": 1.0, "fact": "review rounds per PR: 6.8 reviews/PR (1th pct)", "signal": "signal_1_consistency"}}}, "signal_3_ownership": {"label": "Ownership Profile", "score": 74.1, "headline": "Strong", "key_facts": ["files touched: 2174 files across PRs (99th pct)", "ownership breadth: 9 distinct areas (90th pct)", "critical-area focus: 89% of files in critical paths (vs docs/scripts/utility) (57th pct)", "ownership depth: 60% of work in frontend (50th pct)"], "drivers": {"strongest": {"label": "files touched", "raw_value": 2174, "raw_display": "2174 files across PRs", "percentile": 99.0, "fact": "files touched: 2174 files across PRs (99th pct)", "signal": "signal_3_ownership"}, "weakest": {"label": "ownership depth", "raw_value": 0.5717571297148114, "raw_display": "60% of work in frontend", "percentile": 50.0, "fact": "ownership depth: 60% of work in frontend (50th pct)", "signal": "signal_3_ownership"}}}, "signal_4_review": {"label": "Review Impact", "score": 80.3, "headline": "Top-tier", "key_facts": ["review volume: 309 PRs reviewed (100th pct)", "review comment depth: 555 chars/review (96th pct)", "first review speed: median=0.4h (95th pct)", "times requested as reviewer: 23 explicit requests (88th pct)", "complexity reviewed: 469 lines/PR avg (22th pct)"], "drivers": {"strongest": {"label": "review volume", "raw_value": 309, "raw_display": "309 PRs reviewed", "percentile": 100.0, "fact": "review volume: 309 PRs reviewed (100th pct)", "signal": "signal_4_review"}, "weakest": {"label": "complexity reviewed", "raw_value": 469.45814977973566, "raw_display": "469 lines/PR avg", "percentile": 22.0, "fact": "complexity reviewed: 469 lines/PR avg (22th pct)", "signal": "signal_4_review"}}}, "signal_6_communication": {"label": "Communication Quality", "score": 54.0, "headline": "Average", "key_facts": ["PR description length: avg 2057 chars (76th pct)", "testing notes: 74% of PRs include test detail (50th pct)", "PR template completeness: 76% of sections substantive (36th pct)"], "drivers": {"strongest": {"label": "PR description length", "raw_value": 2057.0824468085107, "raw_display": "avg 2057 chars", "percentile": 76.0, "fact": "PR description length: avg 2057 chars (76th pct)", "signal": "signal_6_communication"}, "weakest": {"label": "PR template completeness", "raw_value": 0.7553191489361702, "raw_display": "76% of sections substantive", "percentile": 36.0, "fact": "PR template completeness: 76% of sections substantive (36th pct)", "signal": "signal_6_communication"}}}, "signal_5_reliability": {"label": "Code Reliability", "score": 99.2, "headline": "Top-tier", "key_facts": ["3 reverts in 376 PRs (0.8%)"], "explanation": "score = (1 - revert_rate) × 100 (direct, not percentile-based)"}}, "raw_metrics": {"signal_1": {"pr_count": 376, "commit_count": 373, "pr_per_week": 29.244444444444444, "commits_per_week": 29.01111111111111, "consistency_cv": 0.4987527536958737, "median_cycle_hours": 4.920555555555556, "mean_review_rounds": 6.792553191489362}, "signal_2": {"total": 376, "distribution": {"refactor": 0.02127659574468085, "feat": 0.3191489361702128, "fix": 0.39893617021276595, "chore": 0.17819148936170212, "perf": 0.06382978723404255, "other": 0.013297872340425532, "test": 0.0026595744680851063, "ci": 0.0026595744680851063}, "category_counts": {"refactor": 8, "feat": 120, "fix": 150, "chore": 67, "perf": 24, "other": 5, "test": 1, "ci": 1}, "feat_fix_ratio": 0.7180851063829787}, "signal_3": {"top_dirs": [["frontend/src", 943], ["frontend/__snapshots__", 300], ["services/mcp", 121], ["products/user_interviews", 119], ["posthog/api", 98]], "top_domains": [["frontend", 1299], ["MCP", 121], ["user interviews", 119], ["PostHog API", 98], ["PostHog core", 83]], "primary_domain": "frontend", "primary_domain_share": 0.5975160993560258, "depth_score": 0.5717571297148114, "breadth_score": 9, "critical_files_pct": 88.82244710211592, "total_files_touched": 2174}, "signal_4": {"review_volume": 1362, "review_pr_count": 309, "avg_complexity_lines": 469.45814977973566, "avg_complexity_files": 9.784140969162996, "avg_comment_depth_chars": 555.2863436123348, "median_time_to_first_review_hours": 0.3552777777777778, "requested_reviewer_count": 23, "inline_comment_count": 1644}, "signal_5": {"revert_count": 3, "total_prs": 376, "revert_rate": 0.007978723404255319, "reverted_prs": [{"reverted_by": 57814, "original_pr": 57670}, {"reverted_by": 56815, "original_pr": 56758}, {"reverted_by": 56593, "original_pr": 56446}]}, "signal_6": {"avg_body_length": 2057.0824468085107, "avg_section_completeness": 0.7553191489361702, "testing_section_filled_ratio": 0.7420212765957447}}}, "andrewm4894": {"overall_impact": 73.2, "tier": "High", "work_mix": "feat=58%, fix=31%, chore=10%", "top_strengths": [{"signal": "Shipping Consistency", "fact": "PR merge frequency: 15.7 PRs/wk (97th pct)"}, {"signal": "Shipping Consistency", "fact": "commit cadence: 15.6 commits/wk (97th pct)"}, {"signal": "Review Impact", "fact": "review volume: 246 PRs reviewed (96th pct)"}], "watch_outs": [{"signal": "Shipping Consistency", "fact": "review rounds per PR: 6.6 reviews/PR (2th pct)"}, {"signal": "Review Impact", "fact": "times requested as reviewer: 0 explicit requests (4th pct)"}], "signals": {"signal_1_consistency": {"label": "Shipping Consistency", "score": 66.6, "headline": "Strong", "key_facts": ["PR merge frequency: 15.7 PRs/wk (97th pct)", "commit cadence: 15.6 commits/wk (97th pct)", "PR cycle time: median=6h open→merge (74th pct)", "weekly consistency: variance=0.53 (lower=steadier) (63th pct)", "review rounds per PR: 6.6 reviews/PR (2th pct)"], "drivers": {"strongest": {"label": "PR merge frequency", "raw_value": 15.71111111111111, "raw_display": "15.7 PRs/wk", "percentile": 97.0, "fact": "PR merge frequency: 15.7 PRs/wk (97th pct)", "signal": "signal_1_consistency"}, "weakest": {"label": "review rounds per PR", "raw_value": 6.628712871287129, "raw_display": "6.6 reviews/PR", "percentile": 2.0, "fact": "review rounds per PR: 6.6 reviews/PR (2th pct)", "signal": "signal_1_consistency"}}}, "signal_3_ownership": {"label": "Ownership Profile", "score": 64.4, "headline": "Strong", "key_facts": ["files touched: 1359 files across PRs (94th pct)", "ownership breadth: 11 distinct areas (94th pct)", "ownership depth: 33% of work in LLM analytics (38th pct)", "critical-area focus: 76% of files in critical paths (vs docs/scripts/utility) (31th pct)"], "drivers": {"strongest": {"label": "files touched", "raw_value": 1359, "raw_display": "1359 files across PRs", "percentile": 94.0, "fact": "files touched: 1359 files across PRs (94th pct)", "signal": "signal_3_ownership"}, "weakest": {"label": "critical-area focus", "raw_value": 75.71743929359823, "raw_display": "76% of files in critical paths (vs docs/scripts/utility)", "percentile": 31.0, "fact": "critical-area focus: 76% of files in critical paths (vs docs/scripts/utility) (31th pct)", "signal": "signal_3_ownership"}}}, "signal_4_review": {"label": "Review Impact", "score": 70.8, "headline": "Strong", "key_facts": ["review volume: 246 PRs reviewed (96th pct)", "first review speed: median=0.7h (90th pct)", "review comment depth: 233 chars/review (85th pct)", "complexity reviewed: 1067 lines/PR avg (79th pct)", "times requested as reviewer: 0 explicit requests (4th pct)"], "drivers": {"strongest": {"label": "review volume", "raw_value": 246, "raw_display": "246 PRs reviewed", "percentile": 96.0, "fact": "review volume: 246 PRs reviewed (96th pct)", "signal": "signal_4_review"}, "weakest": {"label": "times requested as reviewer", "raw_value": 0, "raw_display": "0 explicit requests", "percentile": 4.0, "fact": "times requested as reviewer: 0 explicit requests (4th pct)", "signal": "signal_4_review"}}}, "signal_6_communication": {"label": "Communication Quality", "score": 64.0, "headline": "Strong", "key_facts": ["PR description length: avg 1979 chars (73th pct)", "testing notes: 84% of PRs include test detail (63th pct)", "PR template completeness: 86% of sections substantive (56th pct)"], "drivers": {"strongest": {"label": "PR description length", "raw_value": 1979.1782178217823, "raw_display": "avg 1979 chars", "percentile": 73.0, "fact": "PR description length: avg 1979 chars (73th pct)", "signal": "signal_6_communication"}, "weakest": {"label": "PR template completeness", "raw_value": 0.8564356435643564, "raw_display": "86% of sections substantive", "percentile": 56.0, "fact": "PR template completeness: 86% of sections substantive (56th pct)", "signal": "signal_6_communication"}}}, "signal_5_reliability": {"label": "Code Reliability", "score": 100.0, "headline": "Top-tier", "key_facts": ["0 reverts in 202 PRs (0.0%)"], "explanation": "score = (1 - revert_rate) × 100 (direct, not percentile-based)"}}, "raw_metrics": {"signal_1": {"pr_count": 202, "commit_count": 201, "pr_per_week": 15.71111111111111, "commits_per_week": 15.633333333333333, "consistency_cv": 0.5301206593449137, "median_cycle_hours": 6.279166666666667, "mean_review_rounds": 6.628712871287129}, "signal_2": {"total": 202, "distribution": {"fix": 0.3118811881188119, "feat": 0.5792079207920792, "chore": 0.10396039603960396, "docs": 0.0049504950495049506}, "category_counts": {"fix": 63, "feat": 117, "chore": 21, "docs": 1}, "feat_fix_ratio": 0.891089108910891}, "signal_3": {"top_dirs": [["products/llm_analytics", 450], ["services/mcp", 259], ["posthog/temporal", 229], ["frontend/src", 102], ["posthog/tasks", 72]], "top_domains": [["LLM analytics", 450], ["MCP", 259], ["Temporal workflows", 229], ["frontend", 140], ["PostHog core", 93]], "primary_domain": "LLM analytics", "primary_domain_share": 0.33112582781456956, "depth_score": 0.5217071376011774, "breadth_score": 11, "critical_files_pct": 75.71743929359823, "total_files_touched": 1359}, "signal_4": {"review_volume": 765, "review_pr_count": 246, "avg_complexity_lines": 1066.6535947712418, "avg_complexity_files": 12.023529411764706, "avg_comment_depth_chars": 232.5529411764706, "median_time_to_first_review_hours": 0.6613888888888888, "requested_reviewer_count": 0, "inline_comment_count": 674}, "signal_5": {"revert_count": 0, "total_prs": 202, "revert_rate": 0.0, "reverted_prs": []}, "signal_6": {"avg_body_length": 1979.1782178217823, "avg_section_completeness": 0.8564356435643564, "testing_section_filled_ratio": 0.8415841584158416}}}, "eli-r-ph": {"overall_impact": 72.9, "tier": "High", "work_mix": "feat=80%, fix=13%, chore=7%", "top_strengths": [{"signal": "Review Impact", "fact": "complexity reviewed: 1256 lines/PR avg (84th pct)"}, {"signal": "Communication Quality", "fact": "PR description length: avg 2254 chars (84th pct)"}, {"signal": "Review Impact", "fact": "review volume: 154 PRs reviewed (83th pct)"}], "watch_outs": [{"signal": "Shipping Consistency", "fact": "review rounds per PR: 5.2 reviews/PR (12th pct)"}, {"signal": "Ownership Profile", "fact": "ownership breadth: 5 distinct areas (38th pct)"}], "signals": {"signal_1_consistency": {"label": "Shipping Consistency", "score": 52.9, "headline": "Average", "key_facts": ["PR cycle time: median=10h open→merge (67th pct)", "PR merge frequency: 5.8 PRs/wk (66th pct)", "commit cadence: 5.7 commits/wk (64th pct)", "weekly consistency: variance=0.56 (lower=steadier) (56th pct)", "review rounds per PR: 5.2 reviews/PR (12th pct)"], "drivers": {"strongest": {"label": "PR cycle time", "raw_value": 10.355, "raw_display": "median=10h open→merge", "percentile": 67.0, "fact": "PR cycle time: median=10h open→merge (67th pct)", "signal": "signal_1_consistency"}, "weakest": {"label": "review rounds per PR", "raw_value": 5.226666666666667, "raw_display": "5.2 reviews/PR", "percentile": 12.0, "fact": "review rounds per PR: 5.2 reviews/PR (12th pct)", "signal": "signal_1_consistency"}}}, "signal_3_ownership": {"label": "Ownership Profile", "score": 61.1, "headline": "Strong", "key_facts": ["critical-area focus: 94% of files in critical paths (vs docs/scripts/utility) (77th pct)", "ownership depth: 85% of work in Rust (73th pct)", "files touched: 459 files across PRs (57th pct)", "ownership breadth: 5 distinct areas (38th pct)"], "drivers": {"strongest": {"label": "critical-area focus", "raw_value": 94.11764705882352, "raw_display": "94% of files in critical paths (vs docs/scripts/utility)", "percentile": 77.0, "fact": "critical-area focus: 94% of files in critical paths (vs docs/scripts/utility) (77th pct)", "signal": "signal_3_ownership"}, "weakest": {"label": "ownership breadth", "raw_value": 5, "raw_display": "5 distinct areas", "percentile": 38.0, "fact": "ownership breadth: 5 distinct areas (38th pct)", "signal": "signal_3_ownership"}}}, "signal_4_review": {"label": "Review Impact", "score": 69.5, "headline": "Strong", "key_facts": ["complexity reviewed: 1256 lines/PR avg (84th pct)", "review volume: 154 PRs reviewed (83th pct)", "times requested as reviewer: 8 explicit requests (70th pct)", "first review speed: median=2.2h (61th pct)", "review comment depth: 111 chars/review (50th pct)"], "drivers": {"strongest": {"label": "complexity reviewed", "raw_value": 1256.406432748538, "raw_display": "1256 lines/PR avg", "percentile": 84.0, "fact": "complexity reviewed: 1256 lines/PR avg (84th pct)", "signal": "signal_4_review"}, "weakest": {"label": "review comment depth", "raw_value": 110.62280701754386, "raw_display": "111 chars/review", "percentile": 50.0, "fact": "review comment depth: 111 chars/review (50th pct)", "signal": "signal_4_review"}}}, "signal_6_communication": {"label": "Communication Quality", "score": 81.2, "headline": "Top-tier", "key_facts": ["PR description length: avg 2254 chars (84th pct)", "testing notes: 93% of PRs include test detail (80th pct)", "PR template completeness: 93% of sections substantive (79th pct)"], "drivers": {"strongest": {"label": "PR description length", "raw_value": 2254.4266666666667, "raw_display": "avg 2254 chars", "percentile": 84.0, "fact": "PR description length: avg 2254 chars (84th pct)", "signal": "signal_6_communication"}, "weakest": {"label": "PR template completeness", "raw_value": 0.9288888888888889, "raw_display": "93% of sections substantive", "percentile": 79.0, "fact": "PR template completeness: 93% of sections substantive (79th pct)", "signal": "signal_6_communication"}}}, "signal_5_reliability": {"label": "Code Reliability", "score": 100.0, "headline": "Top-tier", "key_facts": ["0 reverts in 75 PRs (0.0%)"], "explanation": "score = (1 - revert_rate) × 100 (direct, not percentile-based)"}}, "raw_metrics": {"signal_1": {"pr_count": 75, "commit_count": 73, "pr_per_week": 5.833333333333333, "commits_per_week": 5.677777777777777, "consistency_cv": 0.5646610660372836, "median_cycle_hours": 10.355, "mean_review_rounds": 5.226666666666667}, "signal_2": {"total": 75, "distribution": {"feat": 0.8, "chore": 0.06666666666666667, "fix": 0.13333333333333333}, "category_counts": {"feat": 60, "chore": 5, "fix": 10}, "feat_fix_ratio": 0.9333333333333333}, "signal_3": {"top_dirs": [["rust/capture", 272], ["rust/kafka-deduplicator", 35], ["rust/common", 31], ["rust", 17], ["rust/property-defs-rs", 17]], "top_domains": [["Rust", 390], ["ClickHouse layer", 11], ["Temporal workflows", 11], [".agents", 10], [".github", 10]], "primary_domain": "Rust", "primary_domain_share": 0.8496732026143791, "depth_score": 0.6688453159041394, "breadth_score": 5, "critical_files_pct": 94.11764705882352, "total_files_touched": 459}, "signal_4": {"review_volume": 342, "review_pr_count": 154, "avg_complexity_lines": 1256.406432748538, "avg_complexity_files": 11.207602339181287, "avg_comment_depth_chars": 110.62280701754386, "median_time_to_first_review_hours": 2.1769444444444446, "requested_reviewer_count": 8, "inline_comment_count": 225}, "signal_5": {"revert_count": 0, "total_prs": 75, "revert_rate": 0.0, "reverted_prs": []}, "signal_6": {"avg_body_length": 2254.4266666666667, "avg_section_completeness": 0.9288888888888889, "testing_section_filled_ratio": 0.9333333333333333}}}}};
+
+    // ─────────────────────────────────────────────────────────────────
+    // Methodology copy — sourced from impact-signals.md
+    // ─────────────────────────────────────────────────────────────────
+    const METHODOLOGY = [
+      {
+        number: 1,
+        name: "Shipping Consistency",
+        captures: "Whether an engineer shows up reliably and ships work at a steady pace.",
+        metrics: [
+          "PR merge frequency",
+          "Commit cadence + weekly consistency",
+          "Average PR cycle time (open → merge)",
+          "Average review rounds per PR",
+        ],
+        scored: true,
+      },
+      {
+        number: 2,
+        name: "Work Type Mix",
+        captures: "Nature of contributions — features, fixes, refactor, churn.",
+        metrics: [
+          "PR label distribution (feat / fix / refactor / chore / etc.)",
+        ],
+        scored: false,
+      },
+      {
+        number: 3,
+        name: "Ownership Profile",
+        captures: "Deep ownership of critical systems and/or cross-team breadth.",
+        metrics: [
+          "Depth (concentration in top 2 directories)",
+          "Breadth (# distinct areas)",
+          "Critical-area focus (% of files in high-impact code paths)",
+          "Files touched across PRs",
+        ],
+        scored: true,
+      },
+      {
+        number: 4,
+        name: "Review Impact",
+        captures: "Whether they make the rest of the team better.",
+        metrics: [
+          "Review volume",
+          "Complexity of PRs reviewed",
+          "Review comment depth",
+          "Time to first review",
+          "Times requested as reviewer",
+        ],
+        scored: true,
+      },
+      {
+        number: 5,
+        name: "Code Reliability",
+        captures: "Whether their code sticks or gets reverted.",
+        metrics: [
+          "Revert rate (count of reverted PRs / total PRs)",
+        ],
+        scored: true,
+        special: "Scored as (1 − revert_rate) × 100, not percentile-ranked.",
+      },
+      {
+        number: 6,
+        name: "Communication Quality",
+        captures: "Whether they communicate their work clearly.",
+        metrics: [
+          "PR template section completeness (Problem / Changes / Testing)",
+          "Testing-section substantively filled",
+          "PR description length",
+        ],
+        scored: true,
+      },
+    ];
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tier styling
+    // ─────────────────────────────────────────────────────────────────
+    function tierFromScore(score) {
+      if (score >= 75) return "Exceptional";
+      if (score >= 65) return "High";
+      if (score >= 50) return "Solid";
+      if (score >= 40) return "Average";
+      return "Below avg.";
+    }
+    function tierColor(tier) {
+      const map = {
+        "Exceptional": "var(--tier-exceptional)",
+        "High": "var(--tier-high)",
+        "Solid": "var(--tier-solid)",
+        "Average": "var(--tier-average)",
+        "Below avg.": "var(--tier-belowavg)",
+        "Emerging": "var(--tier-belowavg)",
+      };
+      return map[tier] || "var(--tier-solid)";
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Synthesis: directory → human-readable area label
+    // ─────────────────────────────────────────────────────────────────
+    function dirToArea(dir) {
+      if (!dir) return "the codebase";
+      if (dir.startsWith("frontend/")) return "frontend";
+      if (dir.startsWith("rust/") || dir === "rust") return "Rust backend";
+      if (dir.startsWith("services/mcp")) return "MCP service";
+      if (dir.startsWith("ee/hogai")) return "AI / HogAI";
+      if (dir.startsWith("services/llm")) return "LLM services";
+      if (dir.startsWith("products/llm_analytics")) return "LLM analytics";
+      if (dir.startsWith("products/product_analytics")) return "product analytics";
+      if (dir.startsWith("products/session_recordings")) return "session recordings";
+      if (dir.startsWith("products/replay")) return "session replay";
+      if (dir.startsWith("products/")) {
+        return dir.replace("products/", "").replace(/_/g, " ");
+      }
+      if (dir.startsWith("posthog/api")) return "PostHog API";
+      if (dir.startsWith("posthog/temporal")) return "Temporal workflows";
+      if (dir.startsWith("posthog/hogql")) return "HogQL";
+      if (dir.startsWith("posthog/")) return "PostHog core";
+      if (dir === "plugin-server") return "plugin server";
+      if (dir === "livestream") return "livestream";
+      return dir;
+    }
+    function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
+
+    function synthesizeNarrative(eng) {
+      // Overall summary across ALL scored signals. Qualitative, no raw counts.
+      const domain = eng.raw_metrics.signal_3.primary_domain || "the codebase";
+      // Use domain-aggregated depth for role descriptor (matches what the
+      // dashboard shows); depth_score is the stable scoring metric.
+      const depth = eng.raw_metrics.signal_3.primary_domain_share
+        ?? eng.raw_metrics.signal_3.depth_score;
+      const s3score = eng.signals.signal_3_ownership.score;
+
+      // Role descriptor from primary domain + depth.
+      let role;
+      if (depth >= 0.7) role = cap(domain) + " specialist";
+      else if (depth >= 0.4) role = cap(domain) + " contributor";
+      else role = "Cross-domain engineer";
+
+      // Ownership modifier — avoid "specialist with deep ownership" (redundant).
+      // Only add a phrase for contributors with notable depth, OR for
+      // cross-domain engineers with high overall ownership score (broad reach).
+      let ownership = "";
+      if (depth >= 0.7) {
+        // specialist — depth implicit, no modifier
+      } else if (depth >= 0.5) {
+        ownership = " with solid ownership";
+      } else if (depth < 0.4 && s3score >= 70) {
+        ownership = " with broad reach across areas";
+      }
+
+      const lead = role + ownership + ".";
+
+      // Per-signal descriptors based on score level.
+      const desc = [];
+
+      const s1 = eng.signals.signal_1_consistency.score;
+      if (s1 >= 75) desc.push("ships consistently and quickly");
+      else if (s1 >= 65) desc.push("steady shipper");
+
+      const s4 = eng.signals.signal_4_review.score;
+      if (s4 >= 75) desc.push("trusted code reviewer");
+      else if (s4 >= 65) desc.push("active code reviewer");
+
+      const s6 = eng.signals.signal_6_communication.score;
+      if (s6 >= 75) desc.push("thorough communicator");
+      else if (s6 >= 65) desc.push("clear communicator");
+
+      const r5 = eng.raw_metrics.signal_5;
+      if (r5.revert_count === 0 && r5.total_prs >= 50) {
+        desc.push("no reverts in the window");
+      } else if (eng.signals.signal_5_reliability.score >= 95 && r5.revert_count > 0) {
+        desc.push("rare reverts");
+      }
+
+      let tail = "";
+      if (desc.length > 0) {
+        let joined;
+        if (desc.length === 1) joined = desc[0];
+        else if (desc.length === 2) joined = desc[0] + " and " + desc[1];
+        else joined = desc.slice(0, -1).join(", ") + ", and " + desc[desc.length - 1];
+        // Capitalize first letter of the descriptor list.
+        joined = joined.charAt(0).toUpperCase() + joined.slice(1);
+        tail = " " + joined + ".";
+      }
+
+      return lead + tail;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Natural-language strengths
+    // ─────────────────────────────────────────────────────────────────
+    const NL_STRENGTHS = {
+      // Signal 1
+      "PR cycle time": "Merges PRs quickly",
+      "weekly consistency": "Ships work consistently week-to-week",
+      "review rounds per PR": "Lands changes in few review rounds",
+      // Signal 3
+      "ownership depth": "Deeply owns their primary domain",
+      "ownership breadth": "Works across many distinct areas",
+      "critical-area focus": "Spends most time in critical code paths",
+      "files touched": "Touches a broad swath of the codebase",
+      // Signal 4
+      "review volume": "Active code reviewer",
+      "complexity reviewed": "Trusted with reviewing complex PRs",
+      "review comment depth": "Leaves substantive review feedback",
+      "first review speed": "Quick to respond to review requests",
+      "times requested as reviewer": "Frequently sought out as reviewer",
+      // Signal 6
+      "PR template completeness": "Documents work thoroughly in PRs",
+      "testing notes": "Explains testing approach clearly",
+      "PR description length": "Writes detailed PR descriptions",
+    };
+
+    // Per user feedback: don't show volume-y strengths that would pull focus
+    // to a single number (and would invite gaming).
+    const EXCLUDED_STRENGTHS = new Set([
+      "PR merge frequency",
+      "commit cadence",
+    ]);
+
+    function computeStrengths(eng) {
+      const all = [];
+      const sigKeys = [
+        "signal_1_consistency",
+        "signal_3_ownership",
+        "signal_4_review",
+        "signal_6_communication",
+      ];
+      for (const sigKey of sigKeys) {
+        const sig = eng.signals[sigKey];
+        if (!sig || !sig.key_facts) continue;
+        for (const fact of sig.key_facts) {
+          // Parse "label: ... (NNth pct)"
+          const m = fact.match(/^(.+?):\s.*\((\d+)th pct\)$/);
+          if (!m) continue;
+          all.push({
+            label: m[1].trim(),
+            percentile: parseInt(m[2]),
+            signal: sig.label,
+          });
+        }
+      }
+      // Include Signal 5 (reliability) when they have a clean track record.
+      const r5 = eng.raw_metrics.signal_5;
+      const s5score = eng.signals.signal_5_reliability.score;
+      if (r5.revert_count === 0 && r5.total_prs >= 50) {
+        all.push({
+          label: "Code Reliability",
+          percentile: 100,  // direct score
+          signal: "Code Reliability",
+          _nl: "Code rarely needs reverting",
+        });
+      }
+
+      const filtered = all.filter(m =>
+        !EXCLUDED_STRENGTHS.has(m.label) &&
+        m.percentile >= 50 &&
+        (m._nl || NL_STRENGTHS[m.label])
+      );
+      filtered.sort((a, b) => b.percentile - a.percentile);
+
+      // Deduplicate by natural-language phrase.
+      const seen = new Set();
+      const picked = [];
+      for (const m of filtered) {
+        const text = m._nl || NL_STRENGTHS[m.label];
+        if (seen.has(text)) continue;
+        seen.add(text);
+        picked.push({ signal: m.signal, text });
+        if (picked.length >= 3) break;
+      }
+      return picked;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Render functions
+    // ─────────────────────────────────────────────────────────────────
+    function renderMethodology() {
+      document.getElementById("methodology-intro").innerHTML =
+        DATA.scoring_methodology.approach;
+
+      const cardsHtml = METHODOLOGY.map(s => {
+        const badge = s.scored
+          ? '<span class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">Scored</span>'
+          : '<span class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">Descriptive</span>';
+        const metricsList = s.metrics.map(m => `<li>${m}</li>`).join("");
+        const special = s.special
+          ? `<div class="mt-2 text-[11px] text-gray-500 italic">${s.special}</div>`
+          : "";
+        return `
+          <div class="border border-gray-200 rounded-md p-4 bg-gray-50">
+            <div class="flex items-baseline justify-between mb-1">
+              <h3 class="font-semibold text-sm text-gray-900">${s.number}. ${s.name}</h3>
+              ${badge}
+            </div>
+            <p class="text-xs text-gray-600 mb-2">${s.captures}</p>
+            <div class="section-label mb-1">What we measure</div>
+            <ul class="text-xs text-gray-700 list-disc pl-4 space-y-0.5">${metricsList}</ul>
+            ${special}
+          </div>
+        `;
+      }).join("");
+      document.getElementById("methodology-cards").innerHTML = cardsHtml;
+    }
+
+    function renderSignalRow(signalKey, signal) {
+      const score = signal.score;
+      const color = tierColor(tierFromScore(score));
+      const facts = (signal.key_facts || [])
+        .map(f => `<li class="text-[13px] text-gray-700 leading-relaxed">${f}</li>`)
+        .join("");
+      const isReliability = signalKey === "signal_5_reliability";
+      const explanation = isReliability && signal.explanation
+        ? `<div class="text-[11px] text-gray-500 italic mt-1">${signal.explanation}</div>`
+        : "";
+      return `
+        <div class="border-l-2 pl-4" style="border-color:${color}">
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="text-sm font-semibold text-gray-900">${signal.label}</span>
+            <span class="text-sm font-mono text-gray-700">${score.toFixed(0)} / 100</span>
+          </div>
+          <div class="tier-bar mb-2">
+            <div class="tier-bar-fill" style="width:${score}%; background:${color}"></div>
+          </div>
+          <ul class="space-y-0.5 list-disc pl-5">${facts}</ul>
+          ${explanation}
+        </div>
+      `;
+    }
+
+    function renderWorkMixRow(eng) {
+      return `
+        <div class="border-l-2 pl-4 border-gray-300">
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="text-sm font-semibold text-gray-900">Work Type Mix</span>
+            <span class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">Descriptive — not scored</span>
+          </div>
+          <p class="text-[13px] text-gray-700">${eng.work_mix}</p>
+        </div>
+      `;
+    }
+
+    function renderEngineerCard(login, eng, rank) {
+      const score = eng.overall_impact;
+      const tier = eng.tier;
+      const color = tierColor(tier);
+      const narrative = synthesizeNarrative(eng);
+      const strengths = computeStrengths(eng);
+      const strengthsHtml = strengths.map(s => `
+        <li class="text-[13px] text-gray-700 leading-relaxed">
+          <span class="signal-prefix">[${s.signal}]</span> ${s.text}
+        </li>
+      `).join("");
+
+      // Signal breakdown order: 1, 2 (work mix), 3, 4, 5, 6
+      const signalOrder = [
+        ["signal_1_consistency", () => renderSignalRow("signal_1_consistency", eng.signals.signal_1_consistency)],
+        ["signal_2_workmix", () => renderWorkMixRow(eng)],
+        ["signal_3_ownership", () => renderSignalRow("signal_3_ownership", eng.signals.signal_3_ownership)],
+        ["signal_4_review", () => renderSignalRow("signal_4_review", eng.signals.signal_4_review)],
+        ["signal_5_reliability", () => renderSignalRow("signal_5_reliability", eng.signals.signal_5_reliability)],
+        ["signal_6_communication", () => renderSignalRow("signal_6_communication", eng.signals.signal_6_communication)],
+      ];
+      const breakdownHtml = signalOrder.map(([k, fn]) => fn()).join('<div class="h-3"></div>');
+
+      const detailsId = `details-${login}`;
+
+      return `
+        <article class="card">
+          <!-- Top row: rank, login, score, tier -->
+          <div class="flex items-start justify-between gap-6">
+            <div class="flex-1">
+              <div class="flex items-center mb-2">
+                <span class="rank-badge">#${rank}</span>
+                <h2 class="text-xl font-bold text-gray-900">${login}</h2>
+              </div>
+              <p class="text-sm text-gray-700 leading-relaxed ml-11">${narrative}</p>
+            </div>
+            <div class="text-right flex-shrink-0">
+              <div class="text-5xl font-bold leading-none mb-1.5" style="color:${color}">${score.toFixed(0)}</div>
+              <span class="tier-chip" style="background:${color}">${tier}</span>
+            </div>
+          </div>
+
+          <!-- Strengths -->
+          <div class="mt-5 pt-5 border-t border-gray-100">
+            <div class="section-label mb-2">Strengths</div>
+            <ul class="space-y-1 list-none">${strengthsHtml}</ul>
+          </div>
+
+          <!-- Expand toggle -->
+          <div class="mt-4">
+            <button class="toggle expand-toggle" data-target="${detailsId}">▾ See signal breakdown</button>
+          </div>
+
+          <!-- Expanded details -->
+          <div id="${detailsId}" class="collapsible collapsed">
+            <div class="mt-5 pt-5 border-t border-gray-100 space-y-1">
+              <div class="section-label mb-3">Signal breakdown</div>
+              ${breakdownHtml}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Interactions
+    // ─────────────────────────────────────────────────────────────────
+    function toggleMethodology() {
+      const drawer = document.getElementById("methodology");
+      const btn = document.getElementById("methodology-toggle");
+      drawer.classList.toggle("collapsed");
+      btn.textContent = drawer.classList.contains("collapsed")
+        ? "▾ See methodology"
+        : "▴ Hide methodology";
+    }
+
+    function toggleExpand(e) {
+      const btn = e.currentTarget;
+      const target = document.getElementById(btn.dataset.target);
+      target.classList.toggle("collapsed");
+      btn.textContent = target.classList.contains("collapsed")
+        ? "▾ See signal breakdown"
+        : "▴ Hide signal breakdown";
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Init
+    // ─────────────────────────────────────────────────────────────────
+    function init() {
+      renderMethodology();
+
+      const cards = DATA.ranked_engineers.slice(0, 5).map((login, i) =>
+        renderEngineerCard(login, DATA.engineers[login], i + 1)
+      ).join("");
+      document.getElementById("engineers").innerHTML = cards;
+
+      document.getElementById("scope-text").textContent =
+        `Showing top 5 of ${DATA.engineers_analyzed} active engineers`;
+
+      const meta = DATA.metadata;
+      const sinceDate = (meta.since || "").slice(0, 10);
+      const repo = meta.repo || "";
+      document.getElementById("footer-text").textContent =
+        `Data: ${repo} · since ${sinceDate} · ${meta.days || 90} days`;
+
+      document.getElementById("methodology-toggle")
+        .addEventListener("click", toggleMethodology);
+      document.querySelectorAll(".expand-toggle")
+        .forEach(b => b.addEventListener("click", toggleExpand));
+    }
+
+    init();
+  </script>
+</body>
+</html>
